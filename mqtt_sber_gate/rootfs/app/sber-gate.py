@@ -108,6 +108,7 @@ def ha_climate(id,changes):
       payload = {"entity_id": id, "temperature": DevicesDB.get_state(id,'hvac_temp_set'), "hvac_mode": ha_mode}
    else:
       payload = {"entity_id": id, "temperature": DevicesDB.get_state(id,'hvac_temp_set'), "hvac_mode": "off"}
+   log('HA REST climate payload: ' + json.dumps(payload), 2)
    response=requests.post(url, json=payload, headers=hds)
 
 def ha_underfloor_heating(id,changes):
@@ -120,6 +121,7 @@ def ha_underfloor_heating(id,changes):
       payload = {"entity_id": id, "temperature": DevicesDB.get_state(id,'hvac_temp_set'), "hvac_mode": "heat"}
    else:
       payload = {"entity_id": id, "temperature": DevicesDB.get_state(id,'hvac_temp_set'), "hvac_mode": "off"}
+   log('HA REST underfloor payload: ' + json.dumps(payload), 2)
    response=requests.post(url, json=payload, headers=hds)
 
 #   if changes.get('on_off',False):
@@ -484,11 +486,13 @@ def on_log(mqttc, obj, level, string):
     log(string)
 
 def send_status(mqttc, s):
+   log('Sber MQTT send status: ' + s, 2)
    infot = mqttc.publish(sber_root_topic+'/up/status', s, qos=0)
 
 #********************************************
 
 def on_message_cmd(mqttc, obj, msg):
+   log('Sber MQTT recv cmd: ' + msg.payload.decode('utf-8'), 2)
    data=json.loads(msg.payload)
    log("Sber MQTT Command: " + str(data))
    for id,v in data['devices'].items():
@@ -659,6 +663,8 @@ def ws_default(ws,mdata):
 
 Options=json_read(fOptions)
 log_level = LOG_LEVEL_LIST.get(Options.get('log_level','info'),3)
+if os.environ.get('DEBUG','').lower() == 'true':
+   log_level = LOG_LEVEL_LIST['debug']
 
 #https://developers.sber.ru/docs/ru/smarthome/c2c/value
 sber_types={'FLOAT':'float_value','INTEGER':'integer_value','STRING':'string_value','BOOL':'bool_value','ENUM':'enum_value','JSON':'','COLOUR':'colour_value'}
