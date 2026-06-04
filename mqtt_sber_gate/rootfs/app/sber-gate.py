@@ -256,6 +256,8 @@ class CDevicesDB(object):
          r.append({'key':'temperature','value':{"type": "INTEGER", "integer_value": v}})
          r.append({'key':'hvac_temp_set','value':{"type": "INTEGER", "integer_value": 30}})
 #         log(r)
+      if d['category'] == 'intercom':
+         r.append({'key':'online','value':{"type": "BOOL", "bool_value": True}})
 
 
 
@@ -463,7 +465,11 @@ def on_message_cmd(mqttc, obj, msg):
 
          DevicesDB.change_state(id,k['key'],val)
 
-      if DevicesDB.DB[id].get('entity_type',None) == 'climate':
+      if DevicesDB.DB[id].get('category') == 'intercom':
+         if DevicesDB.get_state(id,'unlock'):
+            DevicesDB.change_state(id,'on_off',True)
+            ha_OnOff(id)
+      elif DevicesDB.DB[id].get('entity_type',None) == 'climate':
          ha_climate(id,changes)
       else:
          if DevicesDB.DB[id].get('entity_ha',False):

@@ -1,3 +1,5 @@
+var categories = [];
+
 function Init(){
    AddBlok('<h1>SberGate version: 1.0.17</h1>')
    AddBlok('<a href="index.html">Перейти к настройкам СберАгента</a></p>')
@@ -6,7 +8,7 @@ function Init(){
 //   AddBlok('<button class="btn">&#128465; Удалить</button>')
    AddBlok('<button id="DB_delete" onclick="RunCmd(this.id)">   &#128465; Удалить базу устройств</button><button id="exit" onclick="RunCmd(this.id)">Выход</button>')
    AddBlok('<h2>Устройства:</h2>','alert')
-   apiGet()
+   fetchCategories(apiGet)
 }
 function AddBlok(str,CN){
    let div = document.createElement('div');
@@ -23,6 +25,18 @@ function RunCmd(id,opt){
    apiSend(s,'/api/v2/command');
 }
 
+function fetchCategories(callback){
+   let xhr = new XMLHttpRequest();
+   xhr.open('GET', '/api/v1/categories');
+   xhr.send();
+   xhr.onload = function() {
+      if (xhr.status == 200) {
+         categories = JSON.parse(xhr.response)['categories'] || [];
+      }
+      callback();
+   };
+   xhr.onerror = function() { callback(); };
+}
 
 function ChangeDev(d){
    var t={};   var s={};
@@ -31,14 +45,19 @@ function ChangeDev(d){
    s['devices']=[];
    s['devices'].push(t);
    apiSend(s,'/api/v2/devices');
-   //console.dir(d)
-//   console.log(d.dataset.id);
-//   console.log(d.checked);
+}
+
+function ChangeCategory(sel){
+   var t={}; var s={};
+   t[sel.dataset.id]={'category': sel.value};
+   s['devices']=[];
+   s['devices'].push(t);
+   apiSend(s,'/api/v2/devices');
 }
 
 function UpdateDeviceList(d){
 //console.log(d);
-   let f={'enabled':'Включено','home':'Дом','room':'Комната','id':'ID','name':'Имя','States':'Состояния'}
+   let f={'enabled':'Включено','category':'Категория','home':'Дом','room':'Комната','id':'ID','name':'Имя','States':'Состояния'}
    let table = document.getElementById('devices');
    if (! table) {
       table = document.createElement('table');
@@ -73,6 +92,13 @@ function UpdateDeviceList(d){
                   r = '<input type="checkbox" data-id="'+i+'" onchange=ChangeDev(this)>';
                }
                break;
+            case 'category':
+               var cur = d[i]['category'] || '';
+               var opts = categories.map(function(c){
+                  return '<option value="'+c+'"'+(c===cur?' selected':'')+'>'+c+'</option>';
+               }).join('');
+               r = '<select data-id="'+i+'" onchange="ChangeCategory(this)">'+opts+'</select>';
+               break;
             case 'States':
 //               console.log();
                if (d[i]['States']) {
@@ -93,11 +119,6 @@ function UpdateDeviceList(d){
 
    table.appendChild(thead);
    table.appendChild(tbody);
-//   document.getElementById('body').appendChild(table);
-//   for (let k in d['devices']){
-//      let v=d['devices'][k];
-//      AddBlok(v['id']+':'+v['name']);
-//   }
 }
 
 function Res_Processing(Res){
