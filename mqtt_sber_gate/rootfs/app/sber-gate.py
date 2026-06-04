@@ -85,6 +85,18 @@ def ha_climate(id,changes):
       payload = {"entity_id": id, "temperature": DevicesDB.get_state(id,'hvac_temp_set'), "hvac_mode": "off"}
    response=requests.post(url, json=payload, headers=hds)
 
+def ha_underfloor_heating(id,changes):
+   hds = {'Authorization': 'Bearer '+Options['ha-api_token'], 'content-type': 'application/json'}
+   entity_domain,entity_name=id.split('.',1)
+   log('Отправляем команду в HA для '+id+' Underfloor Heating: ')
+   url=Options['ha-api_url']+'/api/services/'+entity_domain+'/set_temperature'
+   log('HA REST API REQUEST: '+ url)
+   if DevicesDB.get_state(id,'on_off'):
+      payload = {"entity_id": id, "temperature": DevicesDB.get_state(id,'hvac_temp_set'), "hvac_mode": "heat"}
+   else:
+      payload = {"entity_id": id, "temperature": DevicesDB.get_state(id,'hvac_temp_set'), "hvac_mode": "off"}
+   response=requests.post(url, json=payload, headers=hds)
+
 #   if changes.get('on_off',False):
 #      url=Options['ha-api_url']+'/api/services/'+entity_domain+'/'
 #      if DevicesDB.get_state(id,'on_off'):
@@ -256,6 +268,13 @@ class CDevicesDB(object):
          r.append({'key':'temperature','value':{"type": "INTEGER", "integer_value": v}})
          r.append({'key':'hvac_temp_set','value':{"type": "INTEGER", "integer_value": 30}})
 #         log(r)
+      if d['category'] == 'hvac_underfloor_heating':
+         v=round(s.get('temperature',20)*10)
+         vv=round(s.get('hvac_temp_set',20)*10)
+         r.append({'key':'online','value':{"type": "BOOL", "bool_value": True}})
+         r.append({'key':'on_off','value':{"type": "BOOL", "bool_value": s.get('on_off',False)}})
+         r.append({'key':'temperature','value':{"type": "INTEGER", "integer_value": v}})
+         r.append({'key':'hvac_temp_set','value':{"type": "INTEGER", "integer_value": vv}})
       if d['category'] == 'intercom':
          r.append({'key':'online','value':{"type": "BOOL", "bool_value": True}})
 
@@ -469,6 +488,8 @@ def on_message_cmd(mqttc, obj, msg):
          if DevicesDB.get_state(id,'unlock'):
             DevicesDB.change_state(id,'on_off',True)
             ha_OnOff(id)
+      elif DevicesDB.DB[id].get('category') == 'hvac_underfloor_heating':
+         ha_underfloor_heating(id,changes)
       elif DevicesDB.DB[id].get('entity_type',None) == 'climate':
          ha_climate(id,changes)
       else:
