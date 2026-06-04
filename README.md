@@ -1,71 +1,161 @@
-﻿# MQTT-SberGate
-## MQTT SberGate SberDevice IoT Agent for Home Assistant
+# MQTT-SberGate
 
-Агент представляет собой прослойку между облаком Sber и HomeAssistant (HA).
-Его задача взять из HA нужные устройства, отобразить их в облаке Sber и отслеживать
-изменения в облаке с последующей передачей в HA.
-На данный момент агент выбирает сущности switch и script и отображает их как relay в облаке Sber.
+Агент-прослойка между облаком **Sber Smart Home** и **Home Assistant**. Забирает сущности из HA, регистрирует их в облаке Салюта и синхронизирует состояния в обе стороны через MQTT и REST API.
 
-## Первоначальные настройки.
+## Содержание
 
-Для работы агента необходима [регистрация в Studio](https://developers.sber.ru/studio/workspaces/).
+- [Поддерживаемые устройства](#поддерживаемые-устройства)
+- [Установка и настройка](#установка-и-настройка)
+- [Запуск в Docker](#запуск-в-docker)
+- [Веб-интерфейс](#веб-интерфейс)
+- [Отладка](#отладка)
+- [Ссылки](#ссылки)
 
-Требуется создать интеграцию и получить регистрационные данные для агента (sber-mqtt_login, sber-mqtt_password).
+---
 
-Также необходим токен для управления HA. Очень рекомендую завести для этого отдельного пользователя.
-Для получения заходим в профиль пользователя и создаём долгосрочный токен доступа (ha-api_token)
+## Поддерживаемые устройства
 
-## Изменения.
-1.0.5 Добавлена возможность выбирать датчики температуры. 
-      Мелкие правки панели управления.
-      Проверка кода возврата при запросе списка устройств из HA.
+Агент автоматически обнаруживает сущности HA и присваивает им категорию Sber. Категорию можно переопределить вручную в [веб-интерфейсе](#веб-интерфейс) через dropdown — изменение применяется немедленно без перезапуска.
 
-1.0.4 Эксперименты с HA WebSocket API
+| Категория Sber | Автоопределяется из HA | Описание |
+|---|---|---|
+| `relay` | `switch`, `script`, `button` | Реле, выключатель |
+| `light` | `light` | Освещение |
+| `sensor_temp` | `sensor` с `device_class=temperature` | Датчик температуры |
+| `scenario_button` | `input_boolean` | Кнопка сценария (click / double_click) |
+| `hvac_ac` | `climate` | Кондиционер |
+| `hvac_radiator` | `hvac_radiator` | Радиатор отопления |
+| `hvac_underfloor_heating` | переопределяется вручную | Тёплый пол |
+| `intercom` | переопределяется вручную | Домофон |
 
-Теперь появилась какая-никакая обратная связь. То есть если в HA трогаем выключатель, его состояние передаётся в облако Сбера.
-Функция не особо нужная, добавлена по большей части из любопытства, когда случайно заметил, что оказвается в HA есть WebSocket API.
-Добавлено опять же на скорую руку, поэтому возможно всё стало менее стабильным.
+### Кондиционер (`hvac_ac`)
 
-## Немного истории.
+Поддерживаемые функции: включение/выключение, целевая температура, текущая температура, **режим работы**.
 
-Проект начался незадолго до нового года, когда подключенную к HomeAsistant ёлочку захотелось включать голосом.
-Надо сказать у Салюта "Раз-два-три ёлочка гори" очень здорово получилось.
+Маппинг режимов между Sber и Home Assistant:
 
-Благо к тому времени у Sberа уже был [MQTT-to-Cloud для DIY](https://developers.sber.ru/docs/ru/smarthome/mqtt-diy/mqtt-to-diy).
-Правда список поддерживаемых контроллеров ограничивается всеголишь двумя: LogicMachine и Wiren Board. Таким образом имеется только два официальных агента под указанные контроллеры.
+| Sber (`hvac_work_mode`) | Home Assistant (`hvac_mode`) |
+|---|---|
+| `cooling` | `cool` |
+| `heating` | `heat` |
+| `auto` | `auto` |
+| `dehumidification` | `dry` |
+| `ventilation` | `fan_only` |
+| `fast_cooling` | `cool` |
+| `fast_heating` | `heat` |
+| `turbo` | `cool` |
+| `eco` | `auto` |
+| `comfortable_sleep` | `heat` |
+| `air_purification` | `fan_only` |
+| `self_cleaning` | `fan_only` |
 
-Экспериментов было масса. Изначально даже проект начинался на php, но со временем пришло понимание, что быстрее и проще всё реализовать
-на родном для HomeAssistant python и завернуть в виде аддона. Возможно лучше было бы в виде интеграции, но проблема со свободным временем
-не даёт возможности разбираться и двигаться в этом направлении, да и поставленные задачи решины...
+### Тёплый пол (`hvac_underfloor_heating`)
 
-Изначально было реализовано два MQTT подключения. Первое смотрело в облако Sber, а второе в локальный MQTT брокер HomeAssistant.
-Было очень неудобно, так как приходилось городить огород чтобы HomeAssistant реагировал на данные внутреннего MQTT.
-Но, мне подсказали, что у HomeAssistant есть замечательный REST API с помощью которого можно очень просто им управлять.
-Поэтому подключение к внутреннему MQTT HomeAssistant было отключено (код до сих пор ещё болтается в недрах агента, возможно для чего-нибудь ещё пригодится),
-а управление переведено на REST API.
+Подключается как `climate`-сущность в HA. Для активации выбери категорию `hvac_underfloor_heating` в dropdown веб-интерфейса. При управлении через Салют всегда отправляет `hvac_mode: heat` в HA.
 
-Также в ходе экспериментов с оригинальным агентом в проект был включен его web-интерфейс, но до конца правильная работа так и не реализована, чисто на посмотреть.
+### Домофон (`intercom`)
 
-Также подсмотрел замечательную идею управления AndroidTV через adb. Поэтому кроме switch дабавились script.
-Теперь стало возможно сказать ассистенту: "Включи камеру на улице". После чего отрабатывает скрипт HA который отправляет в VLC нужный поток.
-Попытки прокинуть script как камеру не увенчались успехом, даже писал в поддержку. Получил ответ, что-то вроде "пока не реализовано".
+Подключается как `switch`-сущность в HA. Для активации выбери категорию `intercom` в dropdown веб-интерфейса. Голосовая команда «открой домофон» отправляет `switch/turn_on` в HA.
 
-## Ссылки.
+---
 
-Для работы с MQTT используется [Eclipse Paho™ MQTT Python Client](https://github.com/eclipse/paho.mqtt.python)
+## Установка и настройка
 
-[Регистрация пространства в Studio](https://developers.sber.ru/docs/ru/smarthome/space/registration)
+### 1. Регистрация в Sber Studio
 
-[Создание проекта интеграции в Studio](https://developers.sber.ru/docs/ru/smarthome/mqtt-diy/create-mqtt-diy-integration-project)
+1. Зарегистрируйся в [Sber Studio](https://developers.sber.ru/studio/workspaces/)
+2. Создай интеграцию и получи `sber-mqtt_login` и `sber-mqtt_password`
 
-[Авторизация контроллера в облаке Sber](https://developers.sber.ru/docs/ru/smarthome/mqtt-diy/controller-authorization)
+### 2. Токен Home Assistant
 
-[Как работает интеграция Sber](https://developers.sber.ru/docs/ru/smarthome/mqtt-diy/integration-scheme)
+В профиле пользователя HA создай долгосрочный токен доступа (`ha-api_token`). Рекомендуется завести отдельного пользователя.
 
-[Создание интеграции Sber](https://developers.sber.ru/docs/ru/smarthome/mqtt-diy/create-mqtt-diy-integration)
+### 3. Параметры конфигурации
 
-[HA REST API](https://developers.home-assistant.io/docs/api/rest)
+| Параметр | По умолчанию | Описание |
+|---|---|---|
+| `ha-api_url` | `http://ha_server_ip:8123` | Адрес REST API Home Assistant |
+| `ha-api_token` | — | Долгосрочный токен HA |
+| `sber-mqtt_broker` | `mqtt-partners.iot.sberdevices.ru` | MQTT брокер Сбера |
+| `sber-mqtt_broker_port` | `8883` | Порт брокера |
+| `sber-mqtt_login` | — | Логин из Sber Studio |
+| `sber-mqtt_password` | — | Пароль из Sber Studio |
+| `sber-http_api_endpoint` | `https://mqtt-partners.iot.sberdevices.ru` | HTTP API Сбера |
+| `log_level` | `info` | Уровень логирования (`trace`/`debug`/`info`/`warning`/`error`) |
 
-[HA WebSocket API](https://developers.home-assistant.io/docs/api/websocket)
+---
 
-[Telegram](https://t.me/+k_w9uO0h73FkNjJi)
+## Запуск в Docker
+
+```yaml
+services:
+  mqtt-sber-gate:
+    image: mqtt-sber-gate
+    ports:
+      - "9123:9123"
+    volumes:
+      - ./data:/data
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+```
+
+Конфигурация читается из `/data/options.json`:
+
+```json
+{
+  "ha-api_url": "http://192.168.1.10:8123",
+  "ha-api_token": "your_long_lived_token",
+  "sber-mqtt_broker": "mqtt-partners.iot.sberdevices.ru",
+  "sber-mqtt_broker_port": 8883,
+  "sber-mqtt_login": "your_sber_login",
+  "sber-mqtt_password": "your_sber_password",
+  "sber-http_api_endpoint": "https://mqtt-partners.iot.sberdevices.ru",
+  "log_level": "info"
+}
+```
+
+---
+
+## Веб-интерфейс
+
+Доступен на порту `9123`. Открой `http://<host>:9123` в браузере.
+
+Функции:
+- Список всех устройств с текущими состояниями
+- Включение/выключение устройств для синхронизации с Сбером (чекбокс **Включено**)
+- **Dropdown выбора категории** — позволяет переопределить тип устройства, отображаемый в Sber Smart Home, для каждого устройства отдельно. Категория по умолчанию определяется автоматически из типа сущности HA
+- Удаление базы устройств
+
+---
+
+## Отладка
+
+Для включения подробного логирования JSON-сообщений (входящие команды от Сбера, исходящие payload в HA REST API) добавь переменную окружения:
+
+```yaml
+environment:
+  - DEBUG=true
+  - PYTHONUNBUFFERED=1
+```
+
+При `DEBUG=true` уровень логирования принудительно устанавливается в `debug`, вне зависимости от `log_level` в конфиге.
+
+Лог доступен в файле `SberGate.log` — ссылка для скачивания есть в веб-интерфейсе.
+
+---
+
+## Ссылки
+
+- [Sber Studio — регистрация](https://developers.sber.ru/studio/workspaces/)
+- [Создание интеграции в Studio](https://developers.sber.ru/docs/ru/smarthome/mqtt-diy/create-mqtt-diy-integration-project)
+- [Авторизация контроллера в облаке Sber](https://developers.sber.ru/docs/ru/smarthome/mqtt-diy/controller-authorization)
+- [Как работает интеграция Sber](https://developers.sber.ru/docs/ru/smarthome/mqtt-diy/integration-scheme)
+- [Категории устройств Sber C2C](https://developers.sber.ru/docs/ru/smarthome/c2c/devices)
+- [hvac_ac — функции кондиционера](https://developers.sber.ru/docs/ru/smarthome/c2c/hvac_ac)
+- [hvac_work_mode — режимы работы](https://developers.sber.ru/docs/ru/smarthome/c2c/hvac_work_mode)
+- [intercom — функции домофона](https://developers.sber.ru/docs/ru/smarthome/c2c/intercom)
+- [HA REST API](https://developers.home-assistant.io/docs/api/rest)
+- [HA WebSocket API](https://developers.home-assistant.io/docs/api/websocket)
+- [Eclipse Paho MQTT Python Client](https://github.com/eclipse/paho.mqtt.python)
+- [Telegram-чат](https://t.me/+k_w9uO0h73FkNjJi)
