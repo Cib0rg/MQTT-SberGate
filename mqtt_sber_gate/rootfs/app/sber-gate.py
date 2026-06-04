@@ -72,6 +72,29 @@ def ha_OnOff(id):
    response=requests.post(url, json={"entity_id": id}, headers=hds)
 #   print(response)
 
+HA_TO_SBER_MODE = {
+   'cool':      'cooling',
+   'heat':      'heating',
+   'auto':      'auto',
+   'heat_cool': 'auto',
+   'dry':       'dehumidification',
+   'fan_only':  'ventilation',
+}
+SBER_TO_HA_MODE = {
+   'cooling':         'cool',
+   'heating':         'heat',
+   'auto':            'auto',
+   'dehumidification':'dry',
+   'ventilation':     'fan_only',
+   'fast_cooling':    'cool',
+   'fast_heating':    'heat',
+   'turbo':           'cool',
+   'eco':             'auto',
+   'comfortable_sleep':'heat',
+   'air_purification':'fan_only',
+   'self_cleaning':   'fan_only',
+}
+
 def ha_climate(id,changes):
    hds = {'Authorization': 'Bearer '+Options['ha-api_token'], 'content-type': 'application/json'}
    entity_domain,entity_name=id.split('.',1)
@@ -79,8 +102,10 @@ def ha_climate(id,changes):
 #   if changes.get('hvac_temp_set',False):
    url=Options['ha-api_url']+'/api/services/'+entity_domain+'/set_temperature'
    log('HA REST API REQUEST: '+ url)
+   sber_mode = DevicesDB.get_state(id,'hvac_work_mode') or 'cooling'
+   ha_mode = SBER_TO_HA_MODE.get(sber_mode,'cool')
    if DevicesDB.get_state(id,'on_off'):
-      payload = {"entity_id": id, "temperature": DevicesDB.get_state(id,'hvac_temp_set'), "hvac_mode": "cool"}
+      payload = {"entity_id": id, "temperature": DevicesDB.get_state(id,'hvac_temp_set'), "hvac_mode": ha_mode}
    else:
       payload = {"entity_id": id, "temperature": DevicesDB.get_state(id,'hvac_temp_set'), "hvac_mode": "off"}
    response=requests.post(url, json=payload, headers=hds)
@@ -256,9 +281,10 @@ class CDevicesDB(object):
          v=round(s.get('temperature',20)*10)
          vv=round(s.get('hvac_temp_set',20)*10)
          r.append({'key':'online','value':{"type": "BOOL", "bool_value": True}})
-         r.append({'key':'on_off','value':{"type": "BOOL", "bool_value": True}})
+         r.append({'key':'on_off','value':{"type": "BOOL", "bool_value": s.get('on_off',False)}})
          r.append({'key':'temperature','value':{"type": "INTEGER", "integer_value": v}})
          r.append({'key':'hvac_temp_set','value':{"type": "INTEGER", "integer_value": vv}})
+         r.append({'key':'hvac_work_mode','value':{"type": "ENUM", "enum_value": s.get('hvac_work_mode','cooling')}})
 
       if d['category'] == 'hvac_radiator':
 #         log('hvac')
@@ -612,6 +638,7 @@ def ws_event(ws,mdata):
                   DevicesDB.change_state(id,'on_off',False)
                else:
                   DevicesDB.change_state(id,'on_off',True)
+                  DevicesDB.change_state(id,'hvac_work_mode',HA_TO_SBER_MODE.get(new_state,'cooling'))
             else:
                DevicesDB.change_state(id,'on_off',False)
             if not (DevicesDB.DB[id]['States'].get('button_event',None) is None):
@@ -739,6 +766,7 @@ def upd_climate(id,s):
    fn=s['attributes'].get('friendly_name','')
    log('climate: ' + s['entity_id'] + ' '+fn+'('+dc+')',0)
    DevicesDB.update(id,{'entity_ha': True,'entity_type': 'climate', 'friendly_name': fn,'category': 'hvac_ac'})
+   DevicesDB.change_state(id,'hvac_work_mode',HA_TO_SBER_MODE.get(s.get('state','off'),'cooling'))
 
 
 def upd_hvac_radiator(id,s):
