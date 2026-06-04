@@ -1,4 +1,4 @@
-#!/usr/bin/with-contenv bashio
+#!/bin/sh
 #cp /app/data/* /data
 #python3 -m http.server 9123
 

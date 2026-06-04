@@ -27,9 +27,9 @@ LOG_FILE_MAX_SIZE = 1024*1024*7
 log_level = 3
 HA_AREA = {}
 
-fOptions='options.json'
-fDevicesDB='devices.json'
-fCategories='categories.json'
+fOptions='/data/options.json'
+fDevicesDB='/data/devices.json'
+fCategories='/data/categories.json'
 
 #*******************************
 def json_read(f):
@@ -839,7 +839,7 @@ while (Options['sber-http_api_endpoint'] == ''):
 log('SberDevice http_api_endpoint: '+Options['sber-http_api_endpoint'])
 
 hds = {'content-type': 'application/json'}
-if not os.path.exists('models.json'):
+if not os.path.exists('/data/models.json'):
    log('Файл моделей отсутствует. Получаем...')
    SD_Models = requests.get(Options['sber-http_api_endpoint']+'/v1/mqtt-gate/models', headers=hds,auth=(Options['sber-mqtt_login'], Options['sber-mqtt_password']))
    if SD_Models.status_code == 200:
