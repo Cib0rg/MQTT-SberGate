@@ -252,6 +252,10 @@ class CDevicesDB(object):
          self.DB[id][k]=d.get(k,v)
       if (self.DB[id]['name'] == ''):
          self.DB[id]['name'] = self.DB[id]['friendly_name']
+      if self.DB[id].get('category') == 'intercom':
+         self.DB[id].setdefault('States', {})
+         self.DB[id]['States'].setdefault('unlock', '')
+         self.DB[id]['States'].setdefault('open_state', 'closed')
       self.save_DB()
 
    def DeviceStates_mqttSber(self,id):
@@ -345,7 +349,7 @@ class CDevicesDB(object):
                         f.append(ft['name'])
 
             d['model']={'id': 'ID_'+dev_cat, 'manufacturer': 'Janch', 'model': 'Model_'+dev_cat, 'category': dev_cat, 'features': f}
-#            log(d['model'])
+            log('Конфиг устройства '+k+' категория='+dev_cat+' фичи='+str(f), 2)
             d['model_id']=''
             Dev['devices'].append(d)
       self.mqtt_json_devices_list=json.dumps(Dev)
@@ -516,7 +520,10 @@ def on_message_cmd(mqttc, obj, msg):
 
       if DevicesDB.DB[id].get('category') == 'intercom':
          if DevicesDB.get_state(id,'unlock'):
+            log('Домофон '+id+': получена команда unlock, открываем')
             ha_switch(id, True)
+         else:
+            log('Домофон '+id+': команда получена, но unlock не подтверждён: '+str(DevicesDB.get_state(id,'unlock')))
       elif DevicesDB.DB[id].get('category') == 'hvac_underfloor_heating':
          ha_underfloor_heating(id,changes)
       elif DevicesDB.DB[id].get('entity_type',None) == 'climate':
