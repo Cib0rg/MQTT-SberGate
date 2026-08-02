@@ -516,8 +516,7 @@ def on_message_cmd(mqttc, obj, msg):
 
       if DevicesDB.DB[id].get('category') == 'intercom':
          if DevicesDB.get_state(id,'unlock'):
-            DevicesDB.change_state(id,'on_off',True)
-            ha_OnOff(id)
+            ha_switch(id, True)
       elif DevicesDB.DB[id].get('category') == 'hvac_underfloor_heating':
          ha_underfloor_heating(id,changes)
       elif DevicesDB.DB[id].get('entity_type',None) == 'climate':
@@ -632,7 +631,9 @@ def ws_event(ws,mdata):
          log('HA Event: ' + id + ': ' + old_state + ' -> ' + new_state)
          if dev['category'] == 'sensor_temp':
             DevicesDB.change_state(id,'temperature',float(new_state))
-         if new_state == 'on':
+         if dev['category'] == 'intercom':
+            DevicesDB.change_state(id,'open_state','opened' if new_state == 'on' else 'closed')
+         elif new_state == 'on':
             DevicesDB.change_state(id,'on_off',True)
             if not (DevicesDB.DB[id]['States'].get('button_event',None) is None):
                DevicesDB.DB[id]['States']['button_event']='click'
