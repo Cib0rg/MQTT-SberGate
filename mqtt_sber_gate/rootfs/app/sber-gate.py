@@ -235,7 +235,7 @@ class CDevicesDB(object):
             self.DB[id][k]=d.get(k,v)
          self.save_DB()
 
-   def update(self,id,d):
+   def update(self,id,d,auto=False):
       fl={'enabled':False,'name':'','default_name':'','nicknames':[],'home':'','room':'','groups':[],'model_id':'','category':'','hw_version':'hw:'+VERSION,'sw_version':'sw:'+VERSION}
       fl['entity_ha']=False
       fl['entity_type']=''
@@ -249,7 +249,12 @@ class CDevicesDB(object):
             self.DB[id]['States'] = {'button_event':''}
 
       for k,v in d.items():
+         if auto and k == 'category' and self.DB[id].get('category_manual',False):
+            log('Device '+id+': автосинхронизация из HA пропускает category (задана вручную: '+str(self.DB[id]['category'])+')',2)
+            continue
          self.DB[id][k]=d.get(k,v)
+      if (not auto) and ('category' in d):
+         self.DB[id]['category_manual']=True
       if (self.DB[id]['name'] == ''):
          self.DB[id]['name'] = self.DB[id]['friendly_name']
       if self.DB[id].get('category') == 'intercom':
@@ -743,22 +748,22 @@ else:
 def upd_sw(id,s):
    attr=s['attributes'].get('friendly_name','')
    log('switch: ' + s['entity_id'] + ' '+attr,0)
-   DevicesDB.update(s['entity_id'],{'entity_ha': True,'entity_type': 'sw','friendly_name':attr,'category': 'relay'})
+   DevicesDB.update(s['entity_id'],{'entity_ha': True,'entity_type': 'sw','friendly_name':attr,'category': 'relay'},auto=True)
 def upd_light(id,s):
    attr=s['attributes'].get('friendly_name','')
    log('light: ' + s['entity_id'] + ' '+attr,0)
-   DevicesDB.update(s['entity_id'],{'entity_ha': True,'entity_type': 'light','friendly_name':attr,'category': 'light'})
+   DevicesDB.update(s['entity_id'],{'entity_ha': True,'entity_type': 'light','friendly_name':attr,'category': 'light'},auto=True)
 
 def upd_scr(id,s):
    attr=s['attributes'].get('friendly_name','')
    log('script: ' + s['entity_id'] + ' '+attr,0)
-   DevicesDB.update(s['entity_id'],{'entity_ha': True,'entity_type': 'scr','friendly_name':attr,'category': 'relay'})
+   DevicesDB.update(s['entity_id'],{'entity_ha': True,'entity_type': 'scr','friendly_name':attr,'category': 'relay'},auto=True)
 def upd_sensor(id,s):
    dc=s['attributes'].get('device_class','')
    fn=s['attributes'].get('friendly_name','')
    if dc == 'temperature':
 #      log('Сенсор температуры: ' + id + ' ' + fn)
-      DevicesDB.update(id,{'entity_ha': True,'entity_type': 'sensor_temp', 'friendly_name': fn,'category': 'sensor_temp'})
+      DevicesDB.update(id,{'entity_ha': True,'entity_type': 'sensor_temp', 'friendly_name': fn,'category': 'sensor_temp'},auto=True)
 #   if dc == 'pressure':
 #      DevicesDB.update(id,{'entity_ha': True,'entity_type': 'sensor_pressure', 'friendly_name': fn,'category': 'sensor_pressure'})
 
@@ -767,19 +772,19 @@ def upd_button(id,s):
    dc=s['attributes'].get('device_class','')
    fn=s['attributes'].get('friendly_name','')
    log('button: ' + s['entity_id'] + ' '+fn+'('+dc+')',0)
-   DevicesDB.update(id,{'entity_ha': True,'entity_type': 'button', 'friendly_name': fn,'category': 'relay'})
+   DevicesDB.update(id,{'entity_ha': True,'entity_type': 'button', 'friendly_name': fn,'category': 'relay'},auto=True)
 
 def upd_input_boolean(id,s):
    dc=s['attributes'].get('device_class','')
    fn=s['attributes'].get('friendly_name','')
    log('input_boolean: ' + s['entity_id'] + ' '+fn+'('+dc+')',0)
-   DevicesDB.update(id,{'entity_ha': True,'entity_type': 'input_boolean', 'friendly_name': fn,'category': 'scenario_button'})
+   DevicesDB.update(id,{'entity_ha': True,'entity_type': 'input_boolean', 'friendly_name': fn,'category': 'scenario_button'},auto=True)
 
 def upd_climate(id,s):
    dc=s['attributes'].get('device_class','')
    fn=s['attributes'].get('friendly_name','')
    log('climate: ' + s['entity_id'] + ' '+fn+'('+dc+')',0)
-   DevicesDB.update(id,{'entity_ha': True,'entity_type': 'climate', 'friendly_name': fn,'category': 'hvac_ac'})
+   DevicesDB.update(id,{'entity_ha': True,'entity_type': 'climate', 'friendly_name': fn,'category': 'hvac_ac'},auto=True)
    DevicesDB.change_state(id,'hvac_work_mode',HA_TO_SBER_MODE.get(s.get('state','off'),'cooling'))
 
 
@@ -788,7 +793,7 @@ def upd_hvac_radiator(id,s):
    fn=s['attributes'].get('friendly_name','')
    if dc == 'temperature':
 #      log('Радиатор отопления: ' + id + ' ' + fn)
-      DevicesDB.update(id,{'entity_ha': True,'entity_type': 'hvac_radiator', 'friendly_name': fn,'category': 'hvac_radiator'})
+      DevicesDB.update(id,{'entity_ha': True,'entity_type': 'hvac_radiator', 'friendly_name': fn,'category': 'hvac_radiator'},auto=True)
 
 def upd_default(id,s):
    log('Неиспользуемый тип: ' + s['entity_id'],0)
